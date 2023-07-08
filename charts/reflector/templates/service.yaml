@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "reflector.fullname" . }}-validating-webhook
+  labels:
+    {{- include "reflector.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 9680
+      protocol: TCP
+      name: validating-webhook
+  selector:
+    {{- include "reflector.selectorLabels" . | nindent 4 }}

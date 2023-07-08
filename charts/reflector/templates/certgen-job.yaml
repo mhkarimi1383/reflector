@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name:  {{ include "reflector.fullname" . }}-certgen
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook-weight": "4"
+  labels:
+    {{- include "reflector.labels" . | nindent 4 }}
+spec:
+  template:
+    metadata:
+      name:  {{ include "reflector.fullname" . }}-certgen
+      labels:
+        {{- include "reflector.labels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: create
+        image: {{ .Values.certGen.image.repository }}:{{ .Values.certGen.image.tag }}
+        imagePullPolicy: {{ .Values.certGen.image.pullPolicy }}
+        args:
+        - create
+        - --host={{ include "reflector.fullname" . }}-validating-webhook,{{ include "reflector.fullname" . }}-validating-webhook.{{ .Release.Namespace }}.svc,{{ include "reflector.fullname" . }}-validating-webhook.{{ .Release.Namespace }}.svc.cluster,{{ include "reflector.fullname" . }}-validating-webhook.{{ .Release.Namespace }}.svc.cluster.local
+        - --namespace={{ .Release.Namespace }}
+        - --secret-name={{ include "reflector.fullname" . }}-webhook-tls
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "reflector.fullname" . }}-certgen
+      securityContext:
+        runAsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 2000

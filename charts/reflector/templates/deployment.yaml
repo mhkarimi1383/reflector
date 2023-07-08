@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "reflector.fullname" . }}
+  labels:
+    {{- include "reflector.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "reflector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "reflector.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "reflector.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+          env:
+            - name: "SHELL_OPERATOR_NAMESPACE"
+              value: {{ .Release.Namespace | quote }}
+            - name: "VALIDATING_WEBHOOK_SERVICE_NAME"
+              value: "{{ include "reflector.fullname" . }}-validating-webhook"
+            - name: "VALIDATING_WEBHOOK_CONFIGURATION_NAME"
+              value: {{ include "reflector.fullname" . | quote }}
+            - name: "LOG_LEVEL"
+              value: {{ .Values.logLevel | quote }}
+            - name: "LOG_TYPE"
+              value: {{ .Values.logType | quote }}
+            - name: "VALIDATING_WEBHOOK_CA"
+              value: "/validating-certs/ca"
+            - name: "VALIDATING_WEBHOOK_SERVER_KEY"
+              value: "/validating-certs/key"
+            - name: "VALIDATING_WEBHOOK_SERVER_CERT"
+              value: "/validating-certs/cert"
+            {{- range .Values.extraEnv }}
+            - name: {{ .name | quote }}
+              value: {{ toYaml .value | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9680
+              scheme: HTTPS
+          volumeMounts:
+            - mountPath: /validating-certs/
+              name: validating-certs
+              readOnly: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: validating-certs
+          secret:
+            defaultMode: 420
+            secretName: {{ include "reflector.fullname" . }}-webhook-tls
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
