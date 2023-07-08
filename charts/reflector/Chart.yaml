@@ -2,6 +2,11 @@ apiVersion: v2
 name: reflector
 description: Reflector operator for Kubernetes
 
+maintainers:
+  - name: Muhammed Hussein Karimi
+    email: info@karimi.dev
+    url: karimi.dev
+
 # A chart can be either an 'application' or a 'library' chart.
 #
 # Application charts are a collection of templates that can be packaged into versioned archives
