@@ -32,10 +32,6 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image_name_generator.outputs.lowercase }}
 
-      - name: Set COMMIT_HASH
-        id: vars
-        run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
       - name: Build and push Docker image
         id: build-and-push-release
         uses: docker/build-push-action@2eb1c1961a95fc15694676618e422e8ba1d63825
@@ -47,4 +43,4 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$GITHUB_REF_NAME
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.GITHUB_REF_NAME }}
