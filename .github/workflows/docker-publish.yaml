@@ -3,9 +3,10 @@ name: docker-publish
 
 on:
   push:
-  
-  release:
-    types: [published]
+    tags:
+      - '*'
+    branches:
+      - '*'
 
 env:
   IMAGE_NAME: ${{ github.repository }}
