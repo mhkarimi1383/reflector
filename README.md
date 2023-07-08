@@ -5,13 +5,13 @@
 
 ## Installation
 
-To install reflector run the following command
+To install reflector run the following command:
 
 ```bash
 helm install reflector reflector -n reflector --repo https://reflector.karimi.dev --create-namespace
 ```
 
-Also [hare](./charts/reflector/values.yaml) you can find defualt helm values if you prefer to customize them
+Also [here](./charts/reflector/values.yaml) you can find default helm values if you prefer to customize them.
 
 ## Using Reflect CRD
 
@@ -36,7 +36,7 @@ spec:
         foo: bar
 ```
 
-> every namespace in namespaces list should exist before creation, you will get validation error if operator can't find one or more here is an error example 'error: reflects.k8s.karimi.dev "test" could not be patched: admission webhook "reflect-validator.k8s.karimi.dev" denied the request: Namespaces (not-found-ns2 not-found-ns1) does not exist. all of the namespaces should exist before creating new Reflect'
+> Every namespace in namespaces list should exist before creation, you will get validation error if operator can't find one or more namespaces. Here is an error example 'error: reflects.k8s.karimi.dev "test" could not be patched: admission webhook "reflect-validator.k8s.karimi.dev" denied the request: Namespaces (not-found-ns2 not-found-ns1) does not exist. all of the namespaces should exist before creating new Reflect'
 
 
 ## Using Label/Annotations for Secrets
