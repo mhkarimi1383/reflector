@@ -1,7 +1,11 @@
 ---
 name: docker-publish
 
-on: push
+on:
+  push:
+  
+  release:
+    types: [published]
 
 env:
   IMAGE_NAME: ${{ github.repository }}
