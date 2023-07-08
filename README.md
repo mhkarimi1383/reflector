@@ -2,6 +2,17 @@
 
  A generic K8s reflector that handles every kind, with support for automatically created secrets
 
+
+## Installation
+
+To install reflector run the following command
+
+```bash
+helm install reflector reflector -n reflector --repo https://reflector.karimi.dev --create-namespace
+```
+
+Also [hare](./charts/reflector/values.yaml) you can find defualt helm values if you prefer to customize them
+
 ## Using Reflect CRD
 
 Here is an example of using `Reflect` CRD to Reflect your resources
@@ -52,6 +63,6 @@ metadata:
 
 ## TODO
 
-- [  ] Support for watcing created resources to block changes in them
-- [  ] HelmChart and deploy guid
+- [ ] Support for watcing created resources to block changes in them
+- [x] HelmChart and deploy guid
 
