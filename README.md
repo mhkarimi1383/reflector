@@ -49,3 +49,9 @@ metadata:
 
 > Like Reflect CRD namespaces should exist and also if not you will get an error like that
 
+
+## TODO
+
+- [  ] Support for watcing created resources to block changes in them
+- [  ] HelmChart and deploy guid
+
