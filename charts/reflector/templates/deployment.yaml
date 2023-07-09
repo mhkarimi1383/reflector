@@ -50,6 +50,8 @@ spec:
               value: "/validating-certs/key"
             - name: "VALIDATING_WEBHOOK_SERVER_CERT"
               value: "/validating-certs/cert"
+            - name: OPERATOR_USERNAME
+              value: system:serviceaccount:{{ .Release.Namespace }}:{{ include "reflector.serviceAccountName" . }}
             {{- range .Values.extraEnv }}
             - name: {{ .name | quote }}
               value: {{ toYaml .value | quote }}

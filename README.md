@@ -91,5 +91,6 @@ spec:
 
 ## TODO
 
-- [ ] Support for watching created resources to block changes in them
+- [x] Support for watching created resources to block changes in them
 - [x] HelmChart and deploy guid
+- [ ] Support for removal in namespace list (both in crd and secret Label/Annotations)

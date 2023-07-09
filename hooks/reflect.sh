@@ -55,11 +55,12 @@ EOF
 }
 
 function cleanupK8sResource() {
-	echo $1 | jq -r 'del(.metadata.labels."dev.karimi.k8s/reflect", .metadata.annotations."dev.karimi.k8s/reflect-namespaces", .metadata.creationTimestamp, .metadata.resourceVersion, .metadata.uid, .metadata.managedFields)'
+	echo "$1" | jq -r 'del(.metadata.labels."dev.karimi.k8s/reflect", .metadata.annotations."dev.karimi.k8s/reflect-namespaces", .metadata.creationTimestamp, .metadata.resourceVersion, .metadata.uid, .metadata.managedFields)'
 }
 
 function k8sCreateOrReplace() {
-	echo $1 | kubectl replace -f- || echo $1 | kubectl apply -f-
+	manifest=$(echo "$1" | jq -r '. | .metadata.labels."dev.karimi.k8s/reflected" = "true" | tostring')
+	echo "$manifest" | kubectl replace -f- || echo "$manifest" | kubectl apply -f-
 }
 
 function validateNamespaceExistance() {
@@ -70,196 +71,242 @@ function validateNamespaceExistance() {
 	fi
 }
 
-ARRAY_COUNT=$(jq -r '. | length-1' $BINDING_CONTEXT_PATH)
+function checkIfItsMe() {
+	if [[ "$1" == "$OPERATOR_USERNAME" ]]; then
+		echo "1"
+	else
+		echo "0"
+	fi
+}
+
+ARRAY_COUNT=$(jq -r '. | length-1' "$BINDING_CONTEXT_PATH")
 
 if [[ $1 == "--config" ]] ; then
 	cat <<EOF
 {
-  "configVersion":"v1",
-  "kubernetesValidating": [
-    {
-      "name": "reflect-validator.k8s.karimi.dev",
-      "rules": [
-      	{
-          "apiVersions": ["v1"],
-	  "apiGroups": ["k8s.karimi.dev"],
-      	  "resources": ["reflects"],
-      	  "operations": ["CREATE", "UPDATE"],
-	  "scope": "Namespaced"
-        },
-      ],
-      "failurePolicy": "Fail"
-    },
-    {
-      "name": "reflected-secret-validator.k8s.karimi.dev",
-      "labelSelector": {
-        "matchLabels": {
-	  "dev.karimi.k8s/reflect": "true"
-        }
-      },
-      "rules": [
-        {
-	  "operations": ["CREATE", "UPDATE"],
-	  "apiVersions": ["v1"],
-	  "apiGroups": [""],
-	  "resources": ["secrets"],
-	  "scope": "Namespaced"
-	}
-      ],
-      "failurePolicy": "Fail"
-    }
-  ],
-  "kubernetes": [
-    {
-      "name": "ReflectObject",
-      "apiVersion": "k8s.karimi.dev/v1",
-      "kind": "Reflect",
-      "executeHookOnEvent":["Added", "Modified", "Deleted"]
-    },
-    {
-      "name": "SecretWatcher",
-      "apiVersion": "v1",
-      "kind": "Secret",
-      "executeHookOnEvent": [ "Added", "Modified", "Deleted" ],
-      "labelSelector": {
-        "matchLabels": {
-          "dev.karimi.k8s/reflect": "true"
-        }
-      }
-    }
-  ]
+	"configVersion":"v1",
+	"kubernetesValidating": [
+		{
+			"name": "reflect-validator.k8s.karimi.dev",
+			"rules": [
+				{
+					"apiVersions": ["v1"],
+					"apiGroups": ["k8s.karimi.dev"],
+					"resources": ["reflects"],
+					"operations": ["CREATE", "UPDATE"],
+					"scope": "Namespaced"
+				},
+			],
+			"failurePolicy": "Fail"
+		},
+		{
+			"name": "reflected-secret-validator.k8s.karimi.dev",
+			"labelSelector": {
+				"matchLabels": {
+					"dev.karimi.k8s/reflect": "true"
+				}
+			},
+			"rules": [
+				{
+					"operations": ["CREATE", "UPDATE"],
+					"apiVersions": ["v1"],
+					"apiGroups": [""],
+					"resources": ["secrets"],
+					"scope": "Namespaced"
+				}
+			],
+			"failurePolicy": "Fail"
+		},
+		{
+			"name": "reflected-resources-protection.k8s.karimi.dev",
+			"labelSelector": {
+				"matchLabels": {
+					"dev.karimi.k8s/reflected": "true"
+				}
+			},
+			"rules": [
+				{
+					"operations": ["*"],
+					"apiVersions": ["*"],
+					"apiGroups": ["*"],
+					"resources": ["*"],
+					"scope": "Namespaced"
+				}
+			],
+			"failurePolicy": "Fail"
+		}
+	],
+	"kubernetes": [
+		{
+			"name": "ReflectObject",
+			"apiVersion": "k8s.karimi.dev/v1",
+			"kind": "Reflect",
+			"executeHookOnEvent":["Added", "Modified", "Deleted"]
+		},
+		{
+			"name": "SecretWatcher",
+			"apiVersion": "v1",
+			"kind": "Secret",
+			"executeHookOnEvent": [ "Added", "Modified", "Deleted" ],
+			"labelSelector": {
+				"matchLabels": {
+					"dev.karimi.k8s/reflect": "true"
+				}
+			}
+		}
+	]
 }
 EOF
 else
-	type=$(jq -r '.[0].type' $BINDING_CONTEXT_PATH)
+	type=$(jq -r '.[0].type' "$BINDING_CONTEXT_PATH")
 	case $type in
 		Synchronization)
 			echo "Got Synchronization event"
 			;;
 
 		Validating)
-			for IND in $(seq 0 $ARRAY_COUNT)
+			for IND in $(seq 0 "$ARRAY_COUNT")
 			do
-				kind=$(jq -r ".[$IND].review.request.object.kind" $BINDING_CONTEXT_PATH)
-				case $kind in
-					Reflect)
-						namespaceCount=$(jq -r ".[$IND].review.request.object.spec.namespaces | length-1" $BINDING_CONTEXT_PATH)
-						notFound=""
-						isValid="1"
-						for CURNS in $(seq 0 $namespaceCount)
-						do
-							namespace=$(jq -r ".[$IND].review.request.object.spec.namespaces[$CURNS]" $BINDING_CONTEXT_PATH)
-							if [[ $(validateNamespaceExistance $namespace) == "1" ]] >> /dev/null; then
-								echo "Found namespace $namespace"
-							else
-                                        			echo "Missing namespace $namespace"
-								notFound="$namespace $notFound"
-								isValid="0"
-							fi
-						done
-						if [[ $isValid == "1" ]]; then
-							cat <<EOF > $VALIDATING_RESPONSE_PATH
+				kind=$(jq -r ".[$IND].review.request.object.kind" "$BINDING_CONTEXT_PATH")
+				binding=$(jq -r ".[$IND].binding" "$BINDING_CONTEXT_PATH")
+				case $binding in
+					"reflected-resources-protection.k8s.karimi.dev")
+						username=$(jq -r ".[$IND].review.request.userInfo.username" "$BINDING_CONTEXT_PATH")
+						if [[ $(checkIfItsMe "$username") == "1" ]]
+						then
+							cat <<EOF > "$VALIDATING_RESPONSE_PATH"
 {"allowed": true}
 EOF
 						else
-							notFound="${notFound%?}"
-							cat <<EOF > $VALIDATING_RESPONSE_PATH
-{"allowed": false, "message": "Namespaces ($notFound) does not exist. all of the namespaces should exist before creating new Reflect"}
+							cat <<EOF > "$VALIDATING_RESPONSE_PATH"
+{"allowed": false, "message": "You are not able to delete/update reflected objects"}
 EOF
 						fi
 						;;
 
-					Secret)
-						namespaceList=$(jq -r ".[$IND].review.request.object.metadata.annotations.\"dev.karimi.k8s/reflect-namespaces\"" $BINDING_CONTEXT_PATH)
-						namespaceArray=(${namespaceList//,/ })
-						notFound=""
-						isValid="1"
-						for namespace in ${namespaceArray[@]}
-						do
-							if [[ $(validateNamespaceExistance $namespace) == "1" ]] >> /dev/null; then
-								echo "Found namespace $namespace"
-							else
-								echo "Missing namespace $namespace"
-								notFound="$namespace $notFound"
-								isValid="0"
-							fi
-						done
-						if [[ $isValid == "1" ]]; then
-							cat <<EOF > $VALIDATING_RESPONSE_PATH
+					*)
+						case $kind in
+							Reflect)
+								namespaceCount=$(jq -r ".[$IND].review.request.object.spec.namespaces | length-1" "$BINDING_CONTEXT_PATH")
+								notFound=""
+								isValid="1"
+								for CURNS in $(seq 0 "$namespaceCount")
+								do
+									namespace=$(jq -r ".[$IND].review.request.object.spec.namespaces[$CURNS]" "$BINDING_CONTEXT_PATH")
+									if [[ $(validateNamespaceExistance "$namespace") == "1" ]] >> /dev/null; then
+										echo "Found namespace $namespace"
+									else
+										echo "Missing namespace $namespace"
+										notFound="$namespace $notFound"
+										isValid="0"
+									fi
+								done
+								if [[ $isValid == "1" ]]; then
+									cat <<EOF > "$VALIDATING_RESPONSE_PATH"
 {"allowed": true}
 EOF
-						else
-							notFound="${notFound%?}"
-							cat <<EOF > $VALIDATING_RESPONSE_PATH
+								else
+									notFound="${notFound%?}"
+									cat <<EOF > "$VALIDATING_RESPONSE_PATH"
+{"allowed": false, "message": "Namespaces ($notFound) does not exist. all of the namespaces should exist before creating new Reflect"}
+EOF
+								fi
+								;;
+
+							Secret)
+								namespaceList=$(jq -r ".[$IND].review.request.object.metadata.annotations.\"dev.karimi.k8s/reflect-namespaces\"" "$BINDING_CONTEXT_PATH")
+								# shellcheck disable=SC2206 # We want to have that spiliting behavior
+								namespaceArray=(${namespaceList//,/ })
+								notFound=""
+								isValid="1"
+								for namespace in "${namespaceArray[@]}"
+								do
+									if [[ $(validateNamespaceExistance "$namespace") == "1" ]] >> /dev/null; then
+										echo "Found namespace $namespace"
+									else
+										echo "Missing namespace $namespace"
+										notFound="$namespace $notFound"
+										isValid="0"
+									fi
+								done
+								if [[ $isValid == "1" ]]; then
+									cat <<EOF > "$VALIDATING_RESPONSE_PATH"
+{"allowed": true}
+EOF
+								else
+									notFound="${notFound%?}"
+									cat <<EOF > "$VALIDATING_RESPONSE_PATH"
 {"allowed": false, "message": "Namespaces ($notFound) does not exist. all of the namespaces should exist before creating new Reflected Secret"}
 EOF
-						fi
-						;;
-					*)
-						echo "Unknown kind $kind"
+								fi
+								;;
+							*)
+								echo "Unknown kind $kind"
+								;;
+						esac
 						;;
 				esac
 			done
 			;;
 
 		Event)
-			for IND in $(seq 0 $ARRAY_COUNT)
+			for IND in $(seq 0 "$ARRAY_COUNT")
 			do
-				resourceEvent=$(jq -r ".[$IND].watchEvent" $BINDING_CONTEXT_PATH)
-				resourceName=$(jq -r ".[$IND].object.metadata.name" $BINDING_CONTEXT_PATH)
-				resourceNamespace=$(jq -r ".[$IND].object.metadata.namespace" $BINDING_CONTEXT_PATH)
-				resourceKind=$(jq -r ".[$IND].object.kind" $BINDING_CONTEXT_PATH)
+				resourceEvent=$(jq -r ".[$IND].watchEvent" "$BINDING_CONTEXT_PATH")
+				resourceName=$(jq -r ".[$IND].object.metadata.name" "$BINDING_CONTEXT_PATH")
+				resourceNamespace=$(jq -r ".[$IND].object.metadata.namespace" "$BINDING_CONTEXT_PATH")
+				resourceKind=$(jq -r ".[$IND].object.kind" "$BINDING_CONTEXT_PATH")
 				case $resourceKind in
 					Reflect)
-						reflectDestinationCount=$(jq -r ".[$IND].object.spec.namespaces | length-1" $BINDING_CONTEXT_PATH)
-						reflectItemCount=$(jq -r ".[$IND].object.spec.items | length-1" $BINDING_CONTEXT_PATH)
+						reflectDestinationCount=$(jq -r ".[$IND].object.spec.namespaces | length-1" "$BINDING_CONTEXT_PATH")
+						reflectItemCount=$(jq -r ".[$IND].object.spec.items | length-1" "$BINDING_CONTEXT_PATH")
 						case $resourceEvent in
 							Added)
-								sendEvent "$resourceName" "$resourceNamespace" Normal "Creating" "Working on creation..." $resourceKind
-								for CURNS in $(seq 0 $reflectDestinationCount)
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Creating" "Working on creation..." "$resourceKind"
+								for CURNS in $(seq 0 "$reflectDestinationCount")
 								do
-									namespace=$(jq -r ".[$IND].object.spec.namespaces[$CURNS]" $BINDING_CONTEXT_PATH)
-									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on creation of resources in namespace $namespace..." $resourceKind
-									for CURI in $(seq 0 $reflectItemCount)
+									namespace=$(jq -r ".[$IND].object.spec.namespaces[$CURNS]" "$BINDING_CONTEXT_PATH")
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on creation of resources in namespace $namespace..." "$resourceKind"
+									for CURI in $(seq 0 "$reflectItemCount")
 									do
-										resource=$(jq -r ".[$IND].object.spec.items[$CURI] | .metadata.namespace = \"$namespace\" | tostring" $BINDING_CONTEXT_PATH)
-										k8sCreateOrReplace $resource
+										resource=$(jq -r ".[$IND].object.spec.items[$CURI] | .metadata.namespace = \"$namespace\" | tostring" "$BINDING_CONTEXT_PATH")
+										k8sCreateOrReplace "$resource"
 									done
-									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." $resourceKind
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." "$resourceKind"
 								done
-								sendEvent "$resourceName" "$resourceNamespace" Normal "Created" "created resources." $resourceKind
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Created" "created resources." "$resourceKind"
 								;;
 
 							Modified)
-								sendEvent "$resourceName" "$resourceNamespace" Normal "Updating" "Working on updates..." $resourceKind
-								for CURNS in $(seq 0 $reflectDestinationCount)
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Updating" "Working on updates..." "$resourceKind"
+								for CURNS in $(seq 0 "$reflectDestinationCount")
 								do
-									namespace=$(jq -r ".[$IND].object.spec.namespaces[$CURNS]" $BINDING_CONTEXT_PATH)
-									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on update of resources in namespace $namespace..." $resourceKind
-									for CURI in $(seq 0 $reflectItemCount)
+									namespace=$(jq -r ".[$IND].object.spec.namespaces[$CURNS]" "$BINDING_CONTEXT_PATH")
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on update of resources in namespace $namespace..." "$resourceKind"
+									for CURI in $(seq 0 "$reflectItemCount")
 									do
-										resource=$(jq -r ".[$IND].object.spec.items[$CURI] | .metadata.namespace = \"$namespace\" | tostring" $BINDING_CONTEXT_PATH)
+										resource=$(jq -r ".[$IND].object.spec.items[$CURI] | .metadata.namespace = \"$namespace\" | tostring" "$BINDING_CONTEXT_PATH")
 										k8sCreateOrReplace "$resource"
 									done
-									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." $resourceKind
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." "$resourceKind"
 								done
-								sendEvent "$resourceName" "$resourceNamespace" Normal "Updated" "created/updated resources." $resourceKind
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Updated" "created/updated resources." "$resourceKind"
 								;;
 
 							Deleted)
-								sendEvent "$resourceName" "$resourceNamespace" Normal "Removing" "Working on removal..." $resourceKind
-								for CURNS in $(seq 0 $reflectDestinationCount)
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Removing" "Working on removal..." "$resourceKind"
+								for CURNS in $(seq 0 "$reflectDestinationCount")
 								do
-									namespace=$(jq -r ".[$IND].object.spec.namespaces[$CURNS]" $BINDING_CONTEXT_PATH)
-									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on removal of resources in namespace $namespace..." $resourceKind
-									for CURI in $(seq 0 $reflectItemCount)
+									namespace=$(jq -r ".[$IND].object.spec.namespaces[$CURNS]" "$BINDING_CONTEXT_PATH")
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on removal of resources in namespace $namespace..." "$resourceKind"
+									for CURI in $(seq 0 "$reflectItemCount")
 									do
-										resource=$(jq -r ".[$IND].object.spec.items[$CURI] | .metadata.namespace = \"$namespace\" | tostring" $BINDING_CONTEXT_PATH)
+										resource=$(jq -r ".[$IND].object.spec.items[$CURI] | .metadata.namespace = \"$namespace\" | tostring" "$BINDING_CONTEXT_PATH")
 										echo "$resource" | kubectl delete -f-
 									done
-									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." $resourceKind
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." "$resourceKind"
 								done
-								sendEvent "$resourceName" "$resourceNamespace" Normal "Removed" "removed resources." $resourceKind
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Removed" "removed resources." "$resourceKind"
 								;;
 
 							*)
@@ -268,44 +315,45 @@ EOF
 						esac
 						;;
 					Secret)
-						namespaceList=$(jq -r ".[$IND].object.metadata.annotations.\"dev.karimi.k8s/reflect-namespaces\"" $BINDING_CONTEXT_PATH)
+						namespaceList=$(jq -r ".[$IND].object.metadata.annotations.\"dev.karimi.k8s/reflect-namespaces\"" "$BINDING_CONTEXT_PATH")
+						# shellcheck disable=SC2206 # We want to have that spiliting behavior
 						namespaceArray=(${namespaceList//,/ })
 						case $resourceEvent in
 							Added)
-								sendEvent "$resourceName" "$resourceNamespace" Normal "Creating" "Working on creation..." $resourceKind
-								for namespace in ${namespaceArray[@]}
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Creating" "Working on creation..." "$resourceKind"
+								for namespace in "${namespaceArray[@]}"
 								do
-									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on creation of Secret in namespace $namespace..." $resourceKind
-									resource=$(jq -r ".[$IND].object | .metadata.namespace = \"$namespace\" | tostring" $BINDING_CONTEXT_PATH)
-									resource=$(cleanupK8sResource $resource | jq -r 'tostring')
-									k8sCreateOrReplace $resource
-								        sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." $resourceKind
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on creation of Secret in namespace $namespace..." "$resourceKind"
+									resource=$(jq -r ".[$IND].object | .metadata.namespace = \"$namespace\" | tostring" "$BINDING_CONTEXT_PATH")
+									resource=$(cleanupK8sResource "$resource" | jq -r 'tostring')
+									k8sCreateOrReplace "$resource"
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." "$resourceKind"
 								done
-								sendEvent "$resourceName" "$resourceNamespace" Normal "Created" "created secrets." $resourceKind
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Created" "created secrets." "$resourceKind"
 								;;
-                            				Modified)
-                                				sendEvent "$resourceName" "$resourceNamespace" Normal "Updating" "Working on updates..." $resourceKind
-                                				for namespace in ${namespaceArray[@]}
-                                				do
-                                    					sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on create/update of Secret in namespace $namespace..." $resourceKind
-                                    					resource=$(jq -r ".[$IND].object | .metadata.namespace = \"$namespace\" | tostring" $BINDING_CONTEXT_PATH)
-									resource=$(cleanupK8sResource $resource | jq -r 'tostring')
-                                    					k8sCreateOrReplace $resource
-                                        				sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." $resourceKind
-                                				done
-                                				sendEvent "$resourceName" "$resourceNamespace" Normal "Updated" "created/updated secrets." $resourceKind
-                                				;;
+							Modified)
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Updating" "Working on updates..." "$resourceKind"
+								for namespace in "${namespaceArray[@]}"
+								do
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on create/update of Secret in namespace $namespace..." "$resourceKind"
+									resource=$(jq -r ".[$IND].object | .metadata.namespace = \"$namespace\" | tostring" "$BINDING_CONTEXT_PATH")
+									resource=$(cleanupK8sResource "$resource" | jq -r 'tostring')
+									k8sCreateOrReplace "$resource"
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." "$resourceKind"
+								done
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Updated" "created/updated secrets." "$resourceKind"
+								;;
 							Deleted)
-                                				sendEvent "$resourceName" "$resourceNamespace" Normal "Removing" "Working on removal..." $resourceKind
-                                				for namespace in ${namespaceArray[@]}
-                                				do
-                                    					sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on removal of Secret in namespace $namespace..." $resourceKind
-                                    					resource=$(jq -r ".[$IND].object | .metadata.namespace = \"$namespace\" | tostring" $BINDING_CONTEXT_PATH)
-                                    					resource=$(cleanupK8sResource $resource | jq -r 'tostring')
-                                    					echo $resource | kubectl delete -f-
-                                        				sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." $resourceKind
-                                				done
-                                				sendEvent "$resourceName" "$resourceNamespace" Normal "Removed" "removed secrets." $resourceKind
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Removing" "Working on removal..." "$resourceKind"
+								for namespace in "${namespaceArray[@]}"
+								do
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on removal of Secret in namespace $namespace..." "$resourceKind"
+									resource=$(jq -r ".[$IND].object | .metadata.namespace = \"$namespace\" | tostring" "$BINDING_CONTEXT_PATH")
+									resource=$(cleanupK8sResource "$resource" | jq -r 'tostring')
+									echo "$resource" | kubectl delete -f-
+									sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceFinished" "Done with namespace $namespace." "$resourceKind"
+								done
+								sendEvent "$resourceName" "$resourceNamespace" Normal "Removed" "removed secrets." "$resourceKind"
 								;;
 							*)
 								echo "Unknown Operation $resourceEvent"
