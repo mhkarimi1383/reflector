@@ -47,15 +47,16 @@ if a secret contains following properties it will get reflected
 
 ```yaml
 apiVersion: v1
-data:
-  ...
 kind: Secret
+type: Opaque
 metadata:
   name: example.com-tls
   labels:
     dev.karimi.k8s/reflect: "true" # important
   annotations:
     dev.karimi.k8s/reflect-namespaces: ns1,ns2 # important
+data:
+  ...
 ```
 
 > Like Reflect CRD namespaces should exist and also if not you will get an error like that
