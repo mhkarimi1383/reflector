@@ -2,7 +2,6 @@
 
  A generic K8s reflector that handles every kind, with support for automatically created secrets
 
-
 ## Installation
 
 To install reflector run the following command:
@@ -38,7 +37,6 @@ spec:
 
 > Every namespace in namespaces list should exist before creation, you will get validation error if operator can't find one or more namespaces. Here is an error example 'error: reflects.k8s.karimi.dev "test" could not be patched: admission webhook "reflect-validator.k8s.karimi.dev" denied the request: Namespaces (not-found-ns2 not-found-ns1) does not exist. all of the namespaces should exist before creating new Reflect'
 
-
 ## Using Label/Annotations for Secrets
 
 This is mostly used for automatically created secrets (e.g. `cert-manager`)
@@ -59,11 +57,39 @@ data:
   ...
 ```
 
-> Like Reflect CRD namespaces should exist and also if not you will get an error like that
+### Cert-Manager
 
+You can change your `Certificate` Custom Resource to set required values, For example:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-tls
+  namespace: default
+spec:
+  secretTemplate:
+    labels:
+      dev.karimi.k8s/reflect: "true"
+    annotations:
+      dev.karimi.k8s/reflect-namespaces: ns1,ns2
+  dnsNames:
+    - example.karimi.dev
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: http-issuer
+  secretName: example-tls
+  usages:
+  - digital signature
+  - key encipherment
+```
+
+`secretTemplate` is the key part of the magic
+
+> Like Reflect CRD namespaces should exist and also if not you will get an error like that
 
 ## TODO
 
-- [ ] Support for watcing created resources to block changes in them
+- [ ] Support for watching created resources to block changes in them
 - [x] HelmChart and deploy guid
-
