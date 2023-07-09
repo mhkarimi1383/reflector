@@ -24,6 +24,8 @@ jobs:
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - name: Install Helm
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         uses: azure/setup-helm@v3
 
       - name: Run chart-releaser
