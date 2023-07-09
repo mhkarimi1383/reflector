@@ -28,10 +28,10 @@ spec:
     - ns1
     - ns2
   items:
-    - metadata:
-        name: test-config
-      apiVersion: v1
+    - apiVersion: v1
       kind: ConfigMap
+      metadata:
+        name: test-config
       data:
         foo: bar
 ```
