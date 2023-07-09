@@ -2,6 +2,20 @@ apiVersion: v1
 entries:
   reflector:
   - apiVersion: v2
+    appVersion: 0.0.2
+    created: "2023-07-09T10:40:15.387290571Z"
+    description: Reflector operator for Kubernetes
+    digest: 1a613de6706c9fc1d52b91ecc627cba47f809afaeb15323f7d9ed432e835a5a7
+    maintainers:
+    - email: info@karimi.dev
+      name: Muhammed Hussein Karimi
+      url: karimi.dev
+    name: reflector
+    type: application
+    urls:
+    - https://github.com/mhkarimi1383/reflector/releases/download/chart-0.0.2/reflector-0.0.2.tgz
+    version: 0.0.2
+  - apiVersion: v2
     appVersion: 0.0.1
     created: "2023-07-08T14:40:57.467431987Z"
     description: Reflector operator for Kubernetes
@@ -15,4 +29,4 @@ entries:
     urls:
     - https://github.com/mhkarimi1383/reflector/releases/download/chart-0.0.1/reflector-0.0.1.tgz
     version: 0.0.1
-generated: "2023-07-08T14:40:57.467437487Z"
+generated: "2023-07-09T10:40:15.387297971Z"
