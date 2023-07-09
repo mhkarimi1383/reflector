@@ -35,7 +35,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@818d4b7b91585d195f67373fd9cb0332e31a7175
         with:
-          images: ${{ env.REGISTRY }}/${{ steps.image_name_generator.outputs.lowercase }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Build and push Docker image
         id: build-and-push-release
