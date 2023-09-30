@@ -9,15 +9,15 @@ eventTime: $(date -u +"%Y-%m-%dT%H:%M:%S.000000Z")
 firstTimestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
 lastTimestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
 involvedObject:
-  kind: Reflect
-  apiVersion: k8s.karimi.dev/v1
-  name: $1
-  namespace: $2
+    kind: Reflect
+    apiVersion: k8s.karimi.dev/v1
+    name: $1
+    namespace: $2
 kind: Event
 message: $5
 metadata:
-  name: reflect-$(shuf -n 8 -e {A..Z} {a..z} {0..9} | tr -d '\n')
-  namespace: $2
+    name: reflect-$(shuf -n 8 -e {A..Z} {a..z} {0..9} | tr -d '\n')
+    namespace: $2
 type: $3
 reportingComponent: hook-runner
 reportingInstance: reflect-operator
@@ -32,15 +32,15 @@ eventTime: $(date -u +"%Y-%m-%dT%H:%M:%S.000000Z")
 firstTimestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
 lastTimestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
 involvedObject:
-  kind: Secret
-  apiVersion: v1
-  name: $1
-  namespace: $2
+    kind: Secret
+    apiVersion: v1
+    name: $1
+    namespace: $2
 kind: Event
 message: $5
 metadata:
-  name: reflect-$(shuf -n 8 -e {A..Z} {a..z} {0..9} | tr -d '\n')
-  namespace: $2
+    name: reflect-$(shuf -n 8 -e {A..Z} {a..z} {0..9} | tr -d '\n')
+    namespace: $2
 type: $3
 reportingComponent: hook-runner
 reportingInstance: reflect-operator
@@ -58,8 +58,32 @@ function cleanupK8sResource() {
     echo "$1" | jq -r 'del(.metadata.labels."dev.karimi.k8s/reflect", .metadata.annotations."dev.karimi.k8s/reflect-namespaces", .metadata.creationTimestamp, .metadata.resourceVersion, .metadata.uid, .metadata.managedFields)'
 }
 
+function getMissingJSONStrings() {
+    readarray -t first < <(echo "$1" | jq -r -c '.[]')
+    readarray -t second < <(echo "$2" | jq -r -c '.[]')
+    diffrence=$(echo "${first[@]}" "${second[@]}" | tr ' ' '\n' | sort | uniq -u)
+    for i in "${first[@]}"
+    do
+        if echo "${diffrence[@]}" | grep -F --word-regexp "$i" > /dev/null
+        then
+            echo "$i"
+        fi
+    done
+}
+
+function cleanupRemovedNamespaces() {
+    old=$(printf '%s' "$1" | jq -Rsa -r '. / ","')
+    new=$(printf '%s' "$2" | jq -Rsa -r '. / ","')
+    kind="$3"
+    name="$4"
+    getMissingJSONStrings "$old" "$new" | while read -r line
+    do
+        kubectl delete -n "$line" "$kind/$name"
+    done
+}
+
 function k8sCreateOrReplace() {
-    manifest=$(echo "$1" | jq -r '. | .metadata.labels."dev.karimi.k8s/reflected" = "true" | tostring')
+    manifest=$(echo "$1" | jq -r ". | .metadata.labels.\"dev.karimi.k8s/reflected\" = \"true\" | tostring")
     echo "$manifest" | kubectl replace -f- || echo "$manifest" | kubectl apply -f-
 }
 
@@ -77,19 +101,6 @@ function checkIfItsMe() {
     else
         echo "0"
     fi
-}
-
-function diffJSONArrays() {
-    readarray -t first < <(echo "$1" | jq -r -c '.[]')
-    readarray -t second < <(echo "$2" | jq -r -c '.[]')
-    diffrence=$(echo "${first[@]}" "${second[@]}" | tr ' ' '\n' | sort | uniq -u)
-    for i in "${first[@]}"
-    do
-        if echo "${diffrence[@]}" | grep -F --word-regexp "$i" > /dev/null
-        then
-            echo "$i"
-        fi
-    done
 }
 
 ARRAY_COUNT=$(jq -r '. | length-1' "$BINDING_CONTEXT_PATH")
@@ -176,7 +187,7 @@ else
         Synchronization)
             echo "Got Synchronization event"
         ;;
-        
+
         Validating)
             for IND in $(seq 0 "$ARRAY_COUNT")
             do
@@ -196,7 +207,7 @@ EOF
 EOF
                         fi
                     ;;
-                    
+
                     *)
                         case $kind in
                             Reflect)
@@ -225,7 +236,7 @@ EOF
 EOF
                                 fi
                             ;;
-                            
+
                             Secret)
                                 namespaceList=$(jq -r ".[$IND].review.request.object.metadata.annotations.\"dev.karimi.k8s/reflect-namespaces\"" "$BINDING_CONTEXT_PATH")
                                 # shellcheck disable=SC2206 # We want to have that spiliting behavior
@@ -261,7 +272,7 @@ EOF
                 esac
             done
         ;;
-        
+
         Event)
             for IND in $(seq 0 "$ARRAY_COUNT")
             do
@@ -289,7 +300,7 @@ EOF
                                 done
                                 sendEvent "$resourceName" "$resourceNamespace" Normal "Created" "created resources." "$resourceKind"
                             ;;
-                            
+
                             Modified)
                                 sendEvent "$resourceName" "$resourceNamespace" Normal "Updating" "Working on updates..." "$resourceKind"
                                 for CURNS in $(seq 0 "$reflectDestinationCount")
@@ -305,7 +316,7 @@ EOF
                                 done
                                 sendEvent "$resourceName" "$resourceNamespace" Normal "Updated" "created/updated resources." "$resourceKind"
                             ;;
-                            
+
                             Deleted)
                                 sendEvent "$resourceName" "$resourceNamespace" Normal "Removing" "Working on removal..." "$resourceKind"
                                 for CURNS in $(seq 0 "$reflectDestinationCount")
@@ -321,7 +332,7 @@ EOF
                                 done
                                 sendEvent "$resourceName" "$resourceNamespace" Normal "Removed" "removed resources." "$resourceKind"
                             ;;
-                            
+
                             *)
                                 echo "Unknown operation $resourceEvent on $resourceName in namespace $resourceNamespace"
                             ;;
@@ -378,7 +389,7 @@ EOF
                 esac
             done
         ;;
-        
+
         *)
             echo "Unknown type $type"
         ;;
