@@ -87,6 +87,77 @@ function k8sCreateOrReplace() {
     echo "$manifest" | kubectl replace -f- || echo "$manifest" | kubectl apply -f-
 }
 
+NS_LIST_SECRET_TEMPLATE="dev.karimi.reflect.NAME.namespace-list"
+
+function generateSecretName() {
+    echo ${NS_LIST_SECRET_TEMPLATE//"NAME"/"$1"}
+}
+
+function getOrCreateSecret() {
+    manifest="$1"
+    namespace=$(echo "$manifest" | jq -r '.metadata.namespace')
+    name=$(echo "$manifest" | jq -r '.metadata.name')
+    secretName=$(generateSecretName "$name")
+    current=$(kubectl get -n "$namespace" secret/"$secretName" -o json || echo "{
+        \"metadata\": {
+            \"name\": \"$secretName\",
+            \"namespace\": \"$namespace\"
+        },
+        \"type\": \"dev.karimi.k8s/reflection-namespace-status\",
+        \"apiVersion\": \"v1\",
+        \"kind\": \"secret\",
+        \"data\": {
+            \"current-namespaces\": \"$(echo '' | base64)\"
+        }
+    }")
+    k8sCreateOrReplace "$current"
+    echo "$current"
+}
+
+function setSecretNamespaceList() {
+    manifest="$1"
+    namespace=$(echo "$manifest" | jq -r '.metadata.namespace')
+    name=$(echo "$manifest" | jq -r '.metadata.name')
+    secretName=$(generateSecretName "$name")
+    current="{
+        \"metadata\": {
+            \"name\": \"$secretName\",
+            \"namespace\": \"$namespace\"
+        },
+        \"type\": \"dev.karimi.k8s/reflection-namespace-status\",
+        \"apiVersion\": \"v1\",
+        \"kind\": \"secret\",
+        \"data\": {
+            \"current-namespaces\": \"$2\"
+        }
+    }"
+    k8sCreateOrReplace "$current"
+    echo "$current"
+}
+
+function applyNamespaceListDiffrence() {
+    manifest="$1"
+    kind=$(echo "$manifest" | jq -r '.kind')
+    secretName=$(generateSecretName "$manifest" | jq -r '.metadata.name')
+    namespaces=""
+    secret=$(getOrCreateSecret "$manifest")
+    case "${kind}" in
+        Secret)
+            namespaces=$(echo "$manifest" | jq -r ".metadata.annotations.\"dev.karimi.k8s/reflect-namespaces\"")
+        ;;
+        Reflect)
+            namespaces=$(echo "$manifest" | jq -r '.spec.namespace | join(",")')
+        ;;
+        *)
+            echo "Unknown kind"
+        ;;
+    esac
+    oldList=$(echo "$secret" | jq -r '.data."current-namespaces"' | base64 -d)
+
+    cleanupRemovedNamespaces "$oldList" "$namespaces"
+    setSecretNamespaceList "$manifest" "$namespaces"
+}
+
 function validateNamespaceExistance() {
     if kubectl get namespace -o name | grep -E "^namespace/$1\$" - >> /dev/null; then
         echo "1"
