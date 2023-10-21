@@ -119,6 +119,7 @@ function setSecretNamespaceList() {
     namespace=$(echo "$manifest" | jq -r '.metadata.namespace')
     name=$(echo "$manifest" | jq -r '.metadata.name')
     secretName=$(generateSecretName "$name")
+    encoded=$(echo "$2" | base64)
     current="{
         \"metadata\": {
             \"name\": \"$secretName\",
@@ -128,7 +129,7 @@ function setSecretNamespaceList() {
         \"apiVersion\": \"v1\",
         \"kind\": \"secret\",
         \"data\": {
-            \"current-namespaces\": \"$2\"
+            \"current-namespaces\": \"$encoded\"
         }
     }"
     k8sCreateOrReplace "$current"
@@ -138,7 +139,8 @@ function setSecretNamespaceList() {
 function applyNamespaceListDiffrence() {
     manifest="$1"
     kind=$(echo "$manifest" | jq -r '.kind')
-    secretName=$(generateSecretName "$manifest" | jq -r '.metadata.name')
+    name=$(echo "$manifest" | jq -r '.metadata.name')
+    secretName=$(generateSecretName "$name")
     namespaces=""
     secret=$(getOrCreateSecret "$manifest")
     case "${kind}" in
@@ -154,7 +156,7 @@ function applyNamespaceListDiffrence() {
     esac
     oldList=$(echo "$secret" | jq -r '.data."current-namespaces"' | base64 -d)
 
-    cleanupRemovedNamespaces "$oldList" "$namespaces"
+    cleanupRemovedNamespaces "$oldList" "$namespaces" "$kind" "$name"
     setSecretNamespaceList "$manifest" "$namespaces"
 }
 
@@ -378,6 +380,8 @@ EOF
                                 do
                                     namespace=$(jq -r ".[$IND].object.spec.namespaces[$CURNS]" "$BINDING_CONTEXT_PATH")
                                     sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on update of resources in namespace $namespace..." "$resourceKind"
+                                    currentManifest=$(jq -r ".[$IND].object.spec.items[$CURI] | tostring" "$BINDING_CONTEXT_PATH")
+                                    applyNamespaceListDiffrence "$currentManifest"
                                     for CURI in $(seq 0 "$reflectItemCount")
                                     do
                                         resource=$(jq -r ".[$IND].object.spec.items[$CURI] | .metadata.namespace = \"$namespace\" | tostring" "$BINDING_CONTEXT_PATH")
@@ -428,6 +432,8 @@ EOF
                             ;;
                             Modified)
                                 sendEvent "$resourceName" "$resourceNamespace" Normal "Updating" "Working on updates..." "$resourceKind"
+                                currentManifest=$(jq -r ".[$IND].object.spec.items[$CURI] | tostring" "$BINDING_CONTEXT_PATH")
+                                applyNamespaceListDiffrence "$currentManifest"
                                 for namespace in "${namespaceArray[@]}"
                                 do
                                     sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on create/update of Secret in namespace $namespace..." "$resourceKind"
