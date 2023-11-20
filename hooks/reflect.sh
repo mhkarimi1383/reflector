@@ -96,6 +96,7 @@ function generateSecretName() {
 function getOrCreateSecret() {
     manifest="$1"
     namespace=$(echo "$manifest" | jq -r '.metadata.namespace')
+    if [[ $namespace = null ]]; then namespace="default"; fi
     name=$(echo "$manifest" | jq -r '.metadata.name')
     secretName=$(generateSecretName "$name")
     current=$(kubectl get -n "$namespace" secret/"$secretName" -o json || echo "{
