@@ -105,7 +105,7 @@ function getOrCreateSecret() {
         },
         \"type\": \"dev.karimi.k8s/reflection-namespace-status\",
         \"apiVersion\": \"v1\",
-        \"kind\": \"secret\",
+        \"kind\": \"Secret\",
         \"data\": {
             \"current-namespaces\": \"$(echo '' | base64)\"
         }
