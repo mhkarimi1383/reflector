@@ -160,7 +160,7 @@ function applyNamespaceListDiffrence() {
             namespaces=$(echo "$manifest" | jq -r ".metadata.annotations.\"dev.karimi.k8s/reflect-namespaces\"")
         ;;
         Reflect)
-            namespaces=$(echo "$manifest" | jq -r '.spec.namespace | join(",")')
+            namespaces=$(echo "$manifest" | jq -r '.spec.namespaces | join(",")')
         ;;
         *)
             log "Unknown kind $kind"
