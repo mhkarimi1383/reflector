@@ -153,7 +153,7 @@ function applyNamespaceListDiffrence() {
             namespaces=$(echo "$manifest" | jq -r '.spec.namespace | join(",")')
         ;;
         *)
-            echo "Unknown kind"
+            echo "Unknown kind $kind"
         ;;
     esac
     oldList=$(echo "$secret" | jq -r '.data."current-namespaces"' | base64 -d)
