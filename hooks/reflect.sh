@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+PS4='[$LINENO] '
+
+if [[ $DEBUG = t ]]; then
+    set -x
+fi
+
 function log() {
     echo "[$LINENO] $*"
 }
@@ -115,7 +121,7 @@ function getOrCreateSecret() {
             \"current-namespaces\": \"$(echo '' | base64)\"
         }
     }")
-    k8sCreateOrReplace "$current"
+    k8sCreateOrReplace "$current" >> /dev/null
     echo "$current"
 }
 
@@ -138,7 +144,7 @@ function setSecretNamespaceList() {
             \"current-namespaces\": \"$encoded\"
         }
     }"
-    k8sCreateOrReplace "$current"
+    k8sCreateOrReplace "$current" >> /dev/null
     echo "$current"
 }
 
