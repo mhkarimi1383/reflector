@@ -81,15 +81,35 @@ function getMissingJSONStrings() {
     done
 }
 
+# TODO: Better Logic
 function cleanupRemovedNamespaces() {
     old=$(printf '%s' "$1" | jq -Rsa -r '. / ","')
     new=$(printf '%s' "$2" | jq -Rsa -r '. / ","')
     kind="$3"
     name="$4"
-    getMissingJSONStrings "$old" "$new" | while read -r line
-    do
-        kubectl delete -n "$line" "$kind/$name"
-    done
+    case "${kind}" in
+        Reflect)
+            getMissingJSONStrings "$old" "$new" | while read -r line
+            do
+                itemCount=$(echo "$5" | jq -r ".spec.items | length-1" -)
+                for CURI in $(seq 0 "$itemCount")
+                do
+                    resource=$(echo "$5" | jq -r ".spec.items[$CURI] | .metadata.namespace = \"$line\" | tostring" -)
+                    echo "$resource" | kubectl delete -f -
+                done
+            done
+        ;;
+        Secret)
+            getMissingJSONStrings "$old" "$new" | while read -r line
+            do
+                kubectl delete -n "$line" "$kind/$name"
+            done
+        ;;
+        *)
+            log "Unknown kind $kind"
+        ;;
+    esac
+    
 }
 
 function k8sCreateOrReplace() {
@@ -168,7 +188,7 @@ function applyNamespaceListDiffrence() {
     esac
     oldList=$(echo "$secret" | jq -r '.data."current-namespaces"' | base64 -d)
 
-    cleanupRemovedNamespaces "$oldList" "$namespaces" "$kind" "$name"
+    cleanupRemovedNamespaces "$oldList" "$namespaces" "$kind" "$name" "$manifest"
     setSecretNamespaceList "$manifest" "$namespaces"
 }
 
