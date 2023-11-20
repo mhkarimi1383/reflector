@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+function log() {
+    echo "[$LINENO] $*"
+}
+
 function sendEvent() {
     case $6 in
         Reflect)
@@ -49,7 +53,7 @@ action: $4
 EOF
         ;;
         *)
-            echo "Unknown kind $6"
+            log "Unknown kind $6"
         ;;
     esac
 }
@@ -153,7 +157,7 @@ function applyNamespaceListDiffrence() {
             namespaces=$(echo "$manifest" | jq -r '.spec.namespace | join(",")')
         ;;
         *)
-            echo "Unknown kind $kind"
+            log "Unknown kind $kind"
         ;;
     esac
     oldList=$(echo "$secret" | jq -r '.data."current-namespaces"' | base64 -d)
@@ -260,7 +264,7 @@ else
     type=$(jq -r '.[0].type' "$BINDING_CONTEXT_PATH")
     case $type in
         Synchronization)
-            echo "Got Synchronization event"
+            log "Got Synchronization event"
         ;;
 
         Validating)
@@ -293,9 +297,9 @@ EOF
                                 do
                                     namespace=$(jq -r ".[$IND].review.request.object.spec.namespaces[$CURNS]" "$BINDING_CONTEXT_PATH")
                                     if [[ $(validateNamespaceExistance "$namespace") == "1" ]] >> /dev/null; then
-                                        echo "Found namespace $namespace"
+                                        log "Found namespace $namespace"
                                     else
-                                        echo "Missing namespace $namespace"
+                                        log "Missing namespace $namespace"
                                         notFound="$namespace $notFound"
                                         isValid="0"
                                     fi
@@ -321,9 +325,9 @@ EOF
                                 for namespace in "${namespaceArray[@]}"
                                 do
                                     if [[ $(validateNamespaceExistance "$namespace") == "1" ]] >> /dev/null; then
-                                        echo "Found namespace $namespace"
+                                        log "Found namespace $namespace"
                                     else
-                                        echo "Missing namespace $namespace"
+                                        log "Missing namespace $namespace"
                                         notFound="$namespace $notFound"
                                         isValid="0"
                                     fi
@@ -340,7 +344,7 @@ EOF
                                 fi
                             ;;
                             *)
-                                echo "Unknown kind $kind"
+                                log "Unknown kind $kind"
                             ;;
                         esac
                     ;;
@@ -411,7 +415,7 @@ EOF
                             ;;
 
                             *)
-                                echo "Unknown operation $resourceEvent on $resourceName in namespace $resourceNamespace"
+                                log "Unknown operation $resourceEvent on $resourceName in namespace $resourceNamespace"
                             ;;
                         esac
                     ;;
@@ -459,18 +463,18 @@ EOF
                                 sendEvent "$resourceName" "$resourceNamespace" Normal "Removed" "removed secrets." "$resourceKind"
                             ;;
                             *)
-                                echo "Unknown Operation $resourceEvent"
+                                log "Unknown Operation $resourceEvent"
                             ;;
                         esac
                     ;;
                     *)
-                        echo "Unknown kind $kind"
+                        log "Unknown kind $kind"
                 esac
             done
         ;;
 
         *)
-            echo "Unknown type $type"
+            log "Unknown type $type"
         ;;
     esac
 fi
