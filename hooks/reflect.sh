@@ -382,7 +382,7 @@ EOF
                                 do
                                     namespace=$(jq -r ".[$IND].object.spec.namespaces[$CURNS]" "$BINDING_CONTEXT_PATH")
                                     sendEvent "$resourceName" "$resourceNamespace" Normal "NamespaceStarted" "Working on update of resources in namespace $namespace..." "$resourceKind"
-                                    currentManifest=$(jq -r ".[$IND].object.spec.items[$CURI] | tostring" "$BINDING_CONTEXT_PATH")
+                                    currentManifest=$(jq -r ".[$IND].object | tostring" "$BINDING_CONTEXT_PATH")
                                     applyNamespaceListDiffrence "$currentManifest"
                                     for CURI in $(seq 0 "$reflectItemCount")
                                     do
@@ -434,7 +434,7 @@ EOF
                             ;;
                             Modified)
                                 sendEvent "$resourceName" "$resourceNamespace" Normal "Updating" "Working on updates..." "$resourceKind"
-                                currentManifest=$(jq -r ".[$IND].object.spec.items[$CURI] | tostring" "$BINDING_CONTEXT_PATH")
+                                currentManifest=$(jq -r ".[$IND].object | tostring" "$BINDING_CONTEXT_PATH")
                                 applyNamespaceListDiffrence "$currentManifest"
                                 for namespace in "${namespaceArray[@]}"
                                 do
