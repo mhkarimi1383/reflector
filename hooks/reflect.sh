@@ -118,6 +118,7 @@ function getOrCreateSecret() {
 function setSecretNamespaceList() {
     manifest="$1"
     namespace=$(echo "$manifest" | jq -r '.metadata.namespace')
+    if [[ $namespace = null ]]; then namespace="default"; fi
     name=$(echo "$manifest" | jq -r '.metadata.name')
     secretName=$(generateSecretName "$name")
     encoded=$(echo "$2" | base64)
