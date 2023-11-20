@@ -74,7 +74,7 @@ function getMissingJSONStrings() {
     diffrence=$(echo "${first[@]}" "${second[@]}" | tr ' ' '\n' | sort | uniq -u)
     for i in "${first[@]}"
     do
-        if echo "${diffrence[@]}" | grep -F --word-regexp "$i" > /dev/null
+        if echo "${diffrence[@]}" | grep -F -w "$i" > /dev/null
         then
             echo "$i"
         fi
